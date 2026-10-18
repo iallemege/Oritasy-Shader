@@ -1,0 +1,8 @@
+global using System;
+global using System.IO;
+global using System.Reflection;
+global using BepInEx;
+global using BepInEx.Configuration;
+global using HarmonyLib;
+global using NuclearOption.Networking;
+global using UnityEngine;
