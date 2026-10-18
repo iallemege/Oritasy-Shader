@@ -11,14 +11,18 @@ static class Clock
 {
     const double Hour = 1.0 / 3600.0;
     static readonly FieldInfo Factor = AccessTools.Field(typeof(LevelInfo), "timeFactor");
-    static float _base = -1f;
+    static float _mission = -1f;
+    static bool _latched;
     static double _tod = double.NaN;
     static bool _drive;
     static float _event = 1f;
 
     public static void Snap(float hours)
     {
-        _tod = hours < 0f ? 0f : hours >= 24f ? hours % 24f : hours;
+        if (float.IsNaN(hours)) hours = 12f;
+        hours %= 24f;
+        if (hours < 0f) hours += 24f;
+        _tod = hours;
     }
 
     public static void Tick()
@@ -60,21 +64,27 @@ static class Clock
         float cur = 0f;
         try { cur = (float)Factor.GetValue(li); }
         catch { return; }
-        if (cur > 0.0001f) _base = cur;
+        // The mission value is latched once. Writing the sped-up factor back and
+        // reading it next frame multiplies the speed again until the day number
+        // leaves the lighting curves and the world goes black.
+        if (!_latched)
+        {
+            if (cur > 0.0001f && cur <= 120f) { _mission = cur; _latched = true; }
+            else if (cur > 120f) { _mission = 1f; _latched = true; }
+            else return;
+        }
+        Wrap(li);
         float rate = Mathf.Clamp(Opt.TimeRate, 0.001f, 16f);
-        if (_base < 0f) return;
         bool clock = rate <= 0.999f || rate >= 1.001f;
         bool slow = Opt.EventRate < 0.999f;
         if (!clock && !slow)
         {
+            try { Factor.SetValue(li, _mission); } catch { }
             _tod = li.timeOfDay;
             return;
         }
-        if (!clock && slow)
-            rate = 1f;
-        float effective = _base * rate;
-        // Slow motion scales Time.deltaTime, which would drag the sun along with the match.
-        // Below a factor of 1 the game's own float add is smaller than the clock can store.
+        if (!clock && slow) rate = 1f;
+        float effective = _mission * rate;
         if (!slow && effective >= 1f)
         {
             try { Factor.SetValue(li, effective); } catch { }
@@ -83,23 +93,41 @@ static class Clock
         }
         try { Factor.SetValue(li, 0f); } catch { return; }
         _drive = true;
-        Opt.TimeRate = Mathf.Clamp(Opt.TimeRate, 0.001f, 16f);
     }
 
     public static void After(LevelInfo li)
     {
-        if (!_drive || li == null || _base < 0f) return;
-        if (double.IsNaN(_tod)) _tod = li.timeOfDay;
+        if (!_drive || li == null || _mission < 0f) return;
+        if (double.IsNaN(_tod) || double.IsInfinity(_tod)) _tod = WrapHours(li.timeOfDay);
         double rate = Mathf.Clamp(Opt.TimeRate, 0.001f, 16f);
-        _tod += _base * rate * Time.unscaledDeltaTime * Hour;
-        if (_tod >= 24.0) _tod -= 24.0;
+        _tod += _mission * rate * Time.unscaledDeltaTime * Hour;
+        _tod = _tod % 24.0;
         if (_tod < 0.0) _tod += 24.0;
         float next = (float)_tod;
-        if (next != li.timeOfDay)
+        if (float.IsNaN(next)) return;
+        if (Mathf.Abs(Mathf.DeltaAngle(li.timeOfDay * 15f, next * 15f)) > 0.01f)
         {
             try { li.SetTimeOfDay(next); }
             catch { li.timeOfDay = next; }
         }
+    }
+
+    static void Wrap(LevelInfo li)
+    {
+        float t = li.timeOfDay;
+        if (!float.IsNaN(t) && t >= 0f && t < 24f) return;
+        float next = WrapHours(t);
+        _tod = next;
+        try { li.SetTimeOfDay(next); }
+        catch { li.timeOfDay = next; }
+    }
+
+    static float WrapHours(float t)
+    {
+        if (float.IsNaN(t) || float.IsInfinity(t)) return 12f;
+        t %= 24f;
+        if (t < 0f) t += 24f;
+        return t;
     }
 }
 

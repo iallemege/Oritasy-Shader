@@ -1,6 +1,7 @@
 namespace OritasyShader;
 
 [BepInPlugin(Pack.Guid, Pack.Name, Pack.Version)]
+[BepInDependency("com.iallemege.oritassyss", BepInDependency.DependencyFlags.SoftDependency)]
 public sealed class Plugin : BaseUnityPlugin
 {
     Harmony _harmony;
@@ -40,6 +41,6 @@ public static class Pack
 {
     public const string Guid = "com.ial.oritasy.shader";
     public const string Name = "Oritasy's Shader";
-    public const string Version = "0.1.0";
-    public const string Label = "0.1";
+    public const string Version = "0.1.1";
+    public const string Label = "0.1.1";
 }

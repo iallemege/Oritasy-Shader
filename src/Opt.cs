@@ -46,7 +46,7 @@ public static class Opt
         try { return BepInEx.Bootstrap.Chainloader.PluginInfos != null && BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey(guid); }
         catch { return false; }
     }
-    public static string T(string en, string zh) => Zh ? zh : en;
+    public static string T(string en, string zh) => en;
 
     static ConfigFile _file;
 

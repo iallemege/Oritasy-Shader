@@ -7,6 +7,7 @@ static class Menu
     static readonly string[] Zh = { "时间", "天空", "光影", "界面" };
     static bool _open;
     static int _page, _mode, _font = -1;
+    static float _todHold = -1f;
     static Vector2 _grab, _scroll;
     static Rect _win;
     static bool _placed, _dirty;
@@ -56,12 +57,12 @@ static class Menu
         Styles();
         GUI.Box(_win, GUIContent.none, _box);
         GUI.DrawTexture(new Rect(_win.x, _win.y, _win.width, 3f), Tex(new Color(0.45f, 0.85f, 1f, 0.95f)));
-        GUI.Label(new Rect(_win.x + 12f, _win.y + 6f, _win.width - 100f, 22f), "<b>ORITASY</b>   " + (Opt.Zh ? Zh[_page] : En[_page]), _title);
-        if (GUI.Button(new Rect(_win.xMax - 78f, _win.y + 6f, 66f, 22f), Opt.T("Close", "关闭"), _btn)) _open = false;
+        GUI.Label(new Rect(_win.x + 12f, _win.y + 6f, _win.width - 100f, 22f), "<b>ORITASY</b>   " + En[_page], _title);
+        if (GUI.Button(new Rect(_win.xMax - 78f, _win.y + 6f, 66f, 22f), "Close", _btn)) _open = false;
         float x = _win.x + 10f, y = _win.y + 34f, w = _win.width - 20f;
         float cw = (w - 9f) / 4f;
         for (int i = 0; i < 4; i++)
-            if (GUI.Button(new Rect(x + i * (cw + 3f), y, cw, 24f), Opt.Zh ? Zh[i] : En[i], i == _page ? _on : _tab))
+            if (GUI.Button(new Rect(x + i * (cw + 3f), y, cw, 24f), En[i], i == _page ? _on : _tab))
             { _page = i; _scroll = Vector2.zero; }
         y += 32f;
         GUI.Label(new Rect(_win.xMax - 16f, _win.yMax - 16f, 14f, 14f), "◢", _small);
@@ -87,26 +88,35 @@ static class Menu
         LevelInfo li = null;
         try { li = NetworkSceneSingleton<LevelInfo>.i; } catch { }
         float live = li != null ? li.timeOfDay : 12f;
-        float tod = Slider(Opt.T("Hour", "小时"), live, 0f, 24f, "0.00");
-        if (li != null && Mathf.Abs(tod - live) > 0.03f)
+        if (float.IsNaN(live) || live < 0f || live >= 24f) live = 12f;
+        bool hold = Input.GetMouseButton(0);
+        float shown = hold && _todHold >= 0f ? _todHold : live;
+        float tod = Slider("Hour", shown, 0f, 24f, "0.00");
+        if (hold && Mathf.Abs(tod - shown) > 0.01f)
         {
-            Clock.Snap(tod);
-            try { li.SetTimeOfDay(tod); } catch { li.timeOfDay = tod; }
+            _todHold = Mathf.Repeat(tod, 24f);
+            Clock.Snap(_todHold);
+            if (li != null)
+            {
+                try { li.SetTimeOfDay(_todHold); }
+                catch { li.timeOfDay = _todHold; }
+            }
         }
+        else if (!hold) _todHold = -1f;
         Head(Opt.T("Clock speed", "时间流速"));
         Note(Opt.T("How fast the sun and the clock move, relative to this mission. 0.001 is one thousandth.",
             "太阳和时钟相对本任务原来的速度。0.001 是千分之一。"));
-        float rate = Log(Opt.T("Clock", "时钟"), Opt.TimeRate, 0.001f, 16f);
-        if (Mathf.Abs(rate - Opt.TimeRate) > 0.00005f) { Opt.TimeRate = rate; Opt.Save("Time", "ClockRate", rate); }
+        float rate = Log("Clock", Opt.TimeRate, 0.001f, 16f);
+        if (Input.GetMouseButton(0) && Mathf.Abs(rate - Opt.TimeRate) > 0.0008f)
+        { Opt.TimeRate = rate; Opt.Save("Time", "ClockRate", rate); }
         Head(Opt.T("Slow motion", "慢动作"));
         Note(Opt.T("Event speed of the match itself, separate from the clock. 0.001 is one thousandth. The host slows the whole match; anyone else slows only this machine.",
             "整局事件的速度，和时钟分开。最低 0.001 倍。主机放慢会带动整局，其他人只放慢自己这台。"));
-        float ev = Log(Opt.T("Events", "事件"), Opt.EventRate, 0.001f, 1f);
-        if (Mathf.Abs(ev - Opt.EventRate) > 0.00005f) { Opt.EventRate = ev; Opt.Save("Time", "EventRate", ev); }
+        float ev = Log("Events", Opt.EventRate, 0.001f, 1f);
+        if (Input.GetMouseButton(0) && Mathf.Abs(ev - Opt.EventRate) > 0.0008f)
+        { Opt.EventRate = ev; Opt.Save("Time", "EventRate", ev); }
         Head(Opt.T("Weather", "气象"));
-        string[] name = Opt.Zh
-            ? new[] { "晴", "风", "锋", "烈风", "雷暴", "雾" }
-            : new[] { "Fair", "Breezy", "Front", "Gale", "Storm", "Fog" };
+        string[] name = { "Fair", "Breezy", "Front", "Gale", "Storm", "Fog" };
         int hit = -1;
         GUILayout.BeginHorizontal();
         for (int i = 0; i < 3; i++)

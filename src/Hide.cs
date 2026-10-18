@@ -1,7 +1,7 @@
 namespace OritasyShader;
 
-/// <summary>Hides the game's screen UI. The shader window, a pause menu and the map stay up.</summary>
-static class Hide
+/// <summary>Hides the game's screen UI and, while that is on, OritasySS's own drawing.</summary>
+public static class Hide
 {
     const float Rescan = 0.5f;
     static readonly AccessTools.FieldRef<GameplayUI, Canvas> MenuCanvas = AccessTools.FieldRefAccess<GameplayUI, Canvas>("menuCanvas");
@@ -11,11 +11,14 @@ static class Hide
 
     public static bool Active { get; private set; }
 
+    /// <summary>The player asked for a clear screen. OritasySS stops drawing while this is set.</summary>
+    public static bool Cover => Opt.UiHidden && Opt.InMatch && !Paused() && !MapUp();
+
     public static void Tick()
     {
         if (!Opt.InMatch) Opt.UiHidden = false;
         else if (Input.GetKeyDown(Opt.UiKey)) Opt.UiHidden = !Opt.UiHidden;
-        bool want = Opt.UiHidden && Opt.InMatch && !Menu.Open && !Paused() && !MapUp();
+        bool want = Cover;
         if (want != Active)
         {
             Active = want;
@@ -85,4 +88,15 @@ static class Hide
         _faded.Clear();
         _seen.Clear();
     }
+}
+
+[HarmonyPatch]
+static class H_SsDraw
+{
+    static bool Prepare() => AccessTools.TypeByName("OritasySS.Plugin") != null;
+
+    static MethodBase TargetMethod() =>
+        AccessTools.Method(AccessTools.TypeByName("OritasySS.Plugin"), "OnGUI");
+
+    static bool Prefix() => !Hide.Cover;
 }
